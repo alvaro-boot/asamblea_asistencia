@@ -56,31 +56,32 @@ export class DelegadosService {
     const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
     let page = doc.addPage([595, 842]); // A4
-    let y = 800;
+    let y = 780;
     const marginX = 40;
-    const rowHeight = 82;
-
-    const drawHeader = () => {
-      page.drawText('ACTA DE ASISTENCIA', { x: marginX, y, size: 16, font: bold });
-      y -= 22;
-      page.drawText(`Generado: ${new Date().toLocaleString('es-CO')}`, {
-        x: marginX,
-        y,
-        size: 10,
-        font,
-      });
-      y -= 20;
-      page.drawText(`Total firmados: ${firmados.length}`, { x: marginX, y, size: 10, font });
-      y -= 24;
+    const rowHeight = 86;
+    const signatureBox = {
+      x: 360,
+      width: 150,
+      height: 54,
     };
 
-    drawHeader();
+    const tituloActa =
+      'Listado de asistentes a la Septuagésima Octava Asamblea General de Delegados';
+    const maxTituloW = 595 - marginX * 2;
+    let tituloSize = 13;
+    while (
+      bold.widthOfTextAtSize(tituloActa, tituloSize) > maxTituloW &&
+      tituloSize > 8
+    ) {
+      tituloSize -= 0.5;
+    }
+    page.drawText(tituloActa, { x: marginX, y: y, size: tituloSize, font: bold });
+    y -= tituloSize + 18;
 
     for (const d of firmados) {
-      if (y < 120) {
+      if (y < 110) {
         page = doc.addPage([595, 842]);
         y = 800;
-        drawHeader();
       }
 
       page.drawRectangle({
@@ -94,28 +95,50 @@ export class DelegadosService {
 
       page.drawText(`Nombre: ${d.nombre_completo}`, { x: marginX + 6, y: y - 16, size: 11, font: bold });
       page.drawText(`CC: ${d.numero_documento}`, { x: marginX + 6, y: y - 34, size: 10, font });
-      page.drawText(
-        `Fecha firma: ${d.firma_actualizada_at ? d.firma_actualizada_at.toLocaleString('es-CO') : 'N/A'}`,
-        { x: marginX + 6, y: y - 50, size: 9, font },
-      );
+
+      const signatureBoxY = y - 60;
+      page.drawRectangle({
+        x: signatureBox.x,
+        y: signatureBoxY,
+        width: signatureBox.width,
+        height: signatureBox.height,
+        borderWidth: 0.7,
+        borderColor: rgb(0.74, 0.79, 0.9),
+      });
 
       if (d.firma_base64) {
         const bytes = Buffer.from(d.firma_base64, 'base64');
         try {
           const img = await doc.embedPng(bytes);
-          const scaled = img.scale(0.26);
-          page.drawImage(img, { x: 370, y: y - 60, width: scaled.width, height: scaled.height });
+          const scale = Math.min(
+            signatureBox.width / img.width,
+            signatureBox.height / img.height,
+            1,
+          );
+          const drawWidth = img.width * scale;
+          const drawHeight = img.height * scale;
+          const drawX = signatureBox.x + (signatureBox.width - drawWidth) / 2;
+          const drawY = signatureBoxY + (signatureBox.height - drawHeight) / 2;
+          page.drawImage(img, { x: drawX, y: drawY, width: drawWidth, height: drawHeight });
         } catch {
           try {
             const img = await doc.embedJpg(bytes);
-            const scaled = img.scale(0.26);
-            page.drawImage(img, { x: 370, y: y - 60, width: scaled.width, height: scaled.height });
+            const scale = Math.min(
+              signatureBox.width / img.width,
+              signatureBox.height / img.height,
+              1,
+            );
+            const drawWidth = img.width * scale;
+            const drawHeight = img.height * scale;
+            const drawX = signatureBox.x + (signatureBox.width - drawWidth) / 2;
+            const drawY = signatureBoxY + (signatureBox.height - drawHeight) / 2;
+            page.drawImage(img, { x: drawX, y: drawY, width: drawWidth, height: drawHeight });
           } catch {
-            page.drawText('Firma no disponible', { x: 380, y: y - 36, size: 9, font });
+            page.drawText('Firma no disponible', { x: 382, y: y - 36, size: 9, font });
           }
         }
       } else {
-        page.drawText('Firma no disponible', { x: 380, y: y - 36, size: 9, font });
+        page.drawText('Firma no disponible', { x: 382, y: y - 36, size: 9, font });
       }
 
       y -= rowHeight + 10;
